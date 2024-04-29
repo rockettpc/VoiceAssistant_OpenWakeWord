@@ -6,6 +6,9 @@ from playsound import playsound
 import os
 import time
 from datetime import datetime, timedelta
+import openwakeword
+
+openwakeword.utils.download_models()
 
 # Get microphone stream
 FORMAT = pyaudio.paInt16
