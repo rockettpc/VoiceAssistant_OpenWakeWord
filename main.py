@@ -1,58 +1,59 @@
-# Imports
-import pyaudio
-import numpy as np
-from openwakeword.model import Model
-from playsound import playsound
-import os
 import time
-from datetime import datetime, timedelta
-import openwakeword
+import wave
+import pyaudio
+from wake_word import listen_for_wake_word, reset_wake_word_detection, print_available_models, flush_audio_buffer
+from assistant import run_assistant
+import atexit
+import sounddevice as sd
 
-openwakeword.utils.download_models()
+def play_activation_sound():
+    wf = wave.open('audio/activation.wav', 'rb')
+    p = pyaudio.PyAudio()
 
-# Get microphone stream
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 16000
-CHUNK = 1280
-audio = pyaudio.PyAudio()
-mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                    channels=wf.getnchannels(),
+                    rate=wf.getframerate(),
+                    output=True)
 
-# Load pre-trained "hey jarvis" model
-model_path = "./test_venv/lib/python3.9/site-packages/openwakeword/resources/models/hey_jarvis_v0.1.tflite"
-owwModel = Model(wakeword_models=[model_path], inference_framework='tflite')
+    chunk_size = 1024
+    data = wf.readframes(chunk_size)
 
-# Define cooldown time
-cooldown_time = 2  # Change this to your desired cooldown in seconds
+    while data:
+        stream.write(data)
+        data = wf.readframes(chunk_size)
 
-# Initialize last wakeword detection time outside the loop
-last_wakeword_detected = datetime.now() - timedelta(seconds=cooldown_time)  
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
-# Run capture loop continuosly, checking for wakewords
-if __name__ == "__main__":
-    while True:
-        # Get audio
-        audio = np.frombuffer(mic_stream.read(CHUNK), dtype=np.int16)
+def cleanup():
+    try:
+        sd.stop()
+    except:
+        pass
 
-        # Feed to openWakeWord model
-        prediction = owwModel.predict(audio)
+atexit.register(cleanup)
 
-        # Check if "hey jarvis" wakeword is detected
-        if owwModel.prediction_buffer["hey_jarvis_v0.1"][-1] > 0.5:
-            current_time = datetime.now()
-            if (current_time - last_wakeword_detected).total_seconds() >= cooldown_time:
-                print("Wakeword detected")
-                wakeword_detected = True
-                
-                # Play the detected.mp3 sound
-                sound_file = os.path.join('sounds', 'detected.mp3')
-                playsound(sound_file)
-                last_wakeword_detected = current_time  # Update last detection time
+def main():
+    print_available_models()  # Print available wake word models
+    try:
+        while True:
+            if listen_for_wake_word():
+                print("Wake word detected!")
+                play_activation_sound()
+                time.sleep(0.33)  # Reduced wait time to 1/3 of original
+                print("Running assistant...")
+                run_assistant()
+                print("Assistant interaction complete. Resetting wake word detection.")
+                reset_wake_word_detection()
+                flush_audio_buffer()
             else:
-                print("Wakeword suppressed (in cooldown)")
-        else:
-            wakeword_detected = False
+                # If listen_for_wake_word returns False, it means it was interrupted
+                break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("\\nExiting...")
 
-        # Clear the audio buffer if wakeword was detected in the previous iteration
-        if wakeword_detected:
-            owwModel.prediction_buffer["hey_jarvis_v0.1"].clear()
+if __name__ == "__main__":
+    main()
