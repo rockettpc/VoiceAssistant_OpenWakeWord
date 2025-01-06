@@ -26,16 +26,16 @@ sudo apt-get install mpg123
 pip install openwakeword
 ```
 
+## Install requirements
+```
+pip install -r requirements.txt
+```
+
 ## Create .env file
 ```
 OPENAI_API_KEY=YOUR_KEY_HERE
 ASSISTANT_ID=YOUR_ASST_HERE
 THREAD_ID=YOUR_THREAD_HERE
-```
-
-## Install requirements
-```
-pip install -r requirements.txt
 ```
 
 ## Test scripts
